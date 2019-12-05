@@ -2,7 +2,7 @@ const os = require('os')
 const path = require('path')
 const node_ssh = require('node-ssh')
 const _ = require('lodash')
-const { ssh_configs, project_dir, namespace = '', release_name, local_target, tar = false } = require(path.resolve('deploy.config'))
+const { ssh_configs, project_dir, namespace = 'current', release_name, local_target, tar = false } = require(path.resolve('deploy.config'))
 
 const default_config = {
   username: 'deploy',
@@ -15,8 +15,8 @@ class NodeSSH extends node_ssh {
     super()
     this.project_dir = project_dir
     this.namespace = namespace
-    this.dist_target = path.join(this.project_dir, this.namespace, 'current')
-    this.releases_dir = path.join(this.project_dir, this.namespace, 'releases')
+    this.dist_target = path.join(this.project_dir, this.namespace)
+    this.releases_dir = path.join(this.project_dir, [this.namespace, 'releases'].join('-'))
     this.new_release_dir = path.join(this.releases_dir, release_name)
   }
 
