@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 const os = require('os')
 const path = require('path')
 const node_ssh = require('node-ssh')
