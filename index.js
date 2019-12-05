@@ -75,8 +75,8 @@ class NodeSSH extends node_ssh {
     await this.execCommand(`rm -rf ${_.dropRight(arr, 5).map(name => path.join(this.releases_dir, name)).join(' ')}`)
   }
 
-  static deploy() {
-    ssh_configs.map(async config => {
+  static async deploy() {
+    for (const config of ssh_configs) {
       const ssh = new NodeSSH
       try {
         const last_ssh = await ssh.connect2(config)
@@ -88,7 +88,7 @@ class NodeSSH extends node_ssh {
         console.error(err)
         process.exit(1)
       }
-    })
+    }
   }
 }
 
