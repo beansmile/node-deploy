@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "child-process-promise": "^2.2.1",
     "node-ssh": "^6.0.0"
   }
 }

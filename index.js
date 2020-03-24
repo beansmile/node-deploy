@@ -1,5 +1,6 @@
 const os = require('os')
 const path = require('path')
+const { exec } = require('child-process-promise')
 const node_ssh = require('node-ssh')
 const _ = require('lodash')
 const { ssh_configs, project_dir, namespace = 'current', release_name, local_target, tar = false } = require(path.resolve('deploy.config'))
@@ -53,12 +54,14 @@ class NodeSSH extends node_ssh {
 
   async upload() {
     if (tar) {
-      const tar_path = path.join(this.new_release_dir, 'build.tar')
-      await this.putFile(local_target, tar_path)
+      const local_tar_path = path.join(local_target, 'build.tar')
+      await exec(`tar -cvf ${local_tar_path} -C ${local_target} .`)
+      const remote_tar_path = path.join(this.new_release_dir, 'build.tar')
+      await this.putFile(local_tar_path, remote_tar_path)
       console.log('putFile completed')
 
-      await this.execCommand(`tar xvf ${tar_path} -C ${this.new_release_dir}`)
-      await this.execCommand(`rm -rf ${tar_path}`)
+      await this.execCommand(`tar xvf ${remote_tar_path} -C ${this.new_release_dir}`)
+      await this.execCommand(`rm -rf ${remote_tar_path}`)
     } else {
       await this.putDirectory(local_target, this.new_release_dir, {
         recursive: true,

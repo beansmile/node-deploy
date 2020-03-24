@@ -42,7 +42,7 @@ module.exports = {
   project_dir: '/var/www/xxx-frontend',
   namespace: 'admin',
   release_name: moment().format('YYYY-MM-DD_HH_mm'),
-  local_target: path.resolve('dist/build.tar'), // 使用 tar 压缩后的打包文件 
+  local_target: path.resolve('dist'), // vue-cli build 后，打包文件的所在位置
   tar: true, // 开启压缩上传
   ssh_configs: {
     staging: [
