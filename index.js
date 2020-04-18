@@ -3,7 +3,7 @@ const path = require('path')
 const { exec } = require('child-process-promise')
 const node_ssh = require('node-ssh')
 const _ = require('lodash')
-const { ssh_configs, project_dir, namespace = 'current', release_name, local_target, tar = false } = require(path.resolve('deploy.config'))
+const { ssh_configs, project_dir, namespace = 'current', release_name, local_target, tar = false } = require(path.posix.resolve('deploy.config'))
 
 const default_config = {
   username: 'deploy',
@@ -16,9 +16,9 @@ class NodeSSH extends node_ssh {
     super()
     this.project_dir = project_dir
     this.namespace = namespace
-    this.dist_target = path.join(this.project_dir, this.namespace)
-    this.releases_dir = path.join(this.project_dir, [this.namespace, 'releases'].join('-'))
-    this.new_release_dir = path.join(this.releases_dir, release_name)
+    this.dist_target = path.posix.join(this.project_dir, this.namespace)
+    this.releases_dir = path.posix.join(this.project_dir, [this.namespace, 'releases'].join('-'))
+    this.new_release_dir = path.posix.join(this.releases_dir, release_name)
   }
 
   forwardOut() {
@@ -42,7 +42,7 @@ class NodeSSH extends node_ssh {
     if (forwardOut) {
       forwardOut = Object.assign({}, default_config, forwardOut)
       const stream = await this.forwardOut('127.0.0.1', 22, forwardOut.host, forwardOut.port)
-      const ssh = new NodeSSH
+      const ssh = new this.constructor
       return ssh.connect2({
         sock: stream,
         ..._.omit(forwardOut, 'host', 'port'),
@@ -54,16 +54,16 @@ class NodeSSH extends node_ssh {
 
   async upload() {
     if (tar) {
-      const local_tar_path = path.join(local_target, 'build.tar')
+      const local_tar_path = path.posix.join(local_target, 'build.tar')
       await exec(`tar -cvf ${local_tar_path} -C ${local_target} .`)
-      const remote_tar_path = path.join(this.new_release_dir, 'build.tar')
+      const remote_tar_path = path.posix.join(this.new_release_dir, 'build.tar')
       await this.putFile(local_tar_path, remote_tar_path)
       console.log('putFile completed')
 
       await this.execCommand(`tar xvf ${remote_tar_path} -C ${this.new_release_dir}`)
       await this.execCommand(`rm -rf ${remote_tar_path}`)
     } else {
-      await this.putDirectory(local_target, this.new_release_dir, {
+      await this.uploadDirectory(local_target, this.new_release_dir, {
         recursive: true,
         concurrency: 1,
       })
@@ -75,12 +75,21 @@ class NodeSSH extends node_ssh {
     // 只保留最后5个版本
     const { stdout } = await this.execCommand(`ls ${this.releases_dir}`)
     const arr = _.sortBy(_.split(stdout, '\n'))
-    await this.execCommand(`rm -rf ${_.dropRight(arr, 5).map(name => path.join(this.releases_dir, name)).join(' ')}`)
+    await this.execCommand(`rm -rf ${_.dropRight(arr, 5).map(name => path.posix.join(this.releases_dir, name)).join(' ')}`)
+    await this.afterUpload()
+  }
+
+  uploadDirectory(...args) {
+    return this.putDirectory(...args)
+  }
+
+  afterUpload() {
+
   }
 
   static async deploy() {
     for (const config of ssh_configs) {
-      const ssh = new NodeSSH
+      const ssh = new this
       try {
         const last_ssh = await ssh.connect2(config)
         console.log('ssh connected')
@@ -95,4 +104,8 @@ class NodeSSH extends node_ssh {
   }
 }
 
-NodeSSH.deploy()
+if (require.main === module) {
+  NodeSSH.deploy()
+} else {
+  module.exports = NodeSSH
+}
