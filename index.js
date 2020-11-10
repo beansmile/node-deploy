@@ -3,22 +3,30 @@ const path = require('path')
 const { exec } = require('child-process-promise')
 const node_ssh = require('node-ssh')
 const _ = require('lodash')
-const { ssh_configs, project_dir, namespace = 'current', release_name, local_target, tar = false } = require(path.posix.resolve('deploy.config'))
+const fs = require('fs')
 
-const default_config = {
+const defaultConfig = {
   username: 'deploy',
   port: '22',
   privateKey: `${os.homedir()}/.ssh/id_rsa`
 }
 
+let deployConfigInRoot = null
+
+if (fs.existsSync(path.posix.resolve('deploy.config'))) {
+  deployConfigInRoot = require(path.posix.resolve('deploy.config'))
+}
+
 class NodeSSH extends node_ssh {
-  constructor() {
+  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false }) {
     super()
-    this.project_dir = project_dir
-    this.namespace = namespace
-    this.dist_target = path.posix.join(this.project_dir, this.namespace)
-    this.releases_dir = path.posix.join(this.project_dir, [this.namespace, 'releases'].join('-'))
-    this.new_release_dir = path.posix.join(this.releases_dir, release_name)
+    this.localTarget = local_target
+    this.tar = tar
+    this.projectDir = project_dir // /var/www/xxx-frontend
+    this.namespace = namespace // app
+    this.distTarget = path.posix.join(this.projectDir, this.namespace) // /var/www/xxx-frontend/app
+    this.releasesDir = path.posix.join(this.projectDir, [this.namespace, 'releases'].join('-')) // /var/www/xxx-frontend/app-releases
+    this.newReleaseDir = path.posix.join(this.releasesDir, release_name) // /var/www/xxx-frontend/app-releases/YYYY-MM-DD_HH_mm
   }
 
   forwardOut() {
@@ -34,13 +42,13 @@ class NodeSSH extends node_ssh {
     })
   }
 
-  async connect2(config, assign_default = true) {
-    if (assign_default) config = Object.assign({}, default_config, config)
+  async connect2(config, assignDefault = true) {
+    if (assignDefault) config = Object.assign({}, defaultConfig, config)
     await this.connect(config)
 
     let { forwardOut } = config
     if (forwardOut) {
-      forwardOut = Object.assign({}, default_config, forwardOut)
+      forwardOut = Object.assign({}, defaultConfig, forwardOut)
       const stream = await this.forwardOut('127.0.0.1', 22, forwardOut.host, forwardOut.port)
       const ssh = new this.constructor
       return ssh.connect2({
@@ -53,29 +61,30 @@ class NodeSSH extends node_ssh {
   }
 
   async upload() {
-    if (tar) {
-      const local_tar_path = path.posix.join(local_target, 'build.tar')
-      await exec(`tar -cvf ${local_tar_path} -C ${local_target} .`)
-      const remote_tar_path = path.posix.join(this.new_release_dir, 'build.tar')
-      await this.putFile(local_tar_path, remote_tar_path)
+    if (this.tar) {
+      const localTarPath = path.posix.join(this.localTarget, 'build.tar')
+      await exec(`tar -cvf ${localTarPath} -C ${this.localTarget} .`)
+      const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar')
+      await this.putFile(localTarPath, remoteTarPath)
       console.log('putFile completed')
 
-      await this.execCommand(`tar xvf ${remote_tar_path} -C ${this.new_release_dir}`)
-      await this.execCommand(`rm -rf ${remote_tar_path}`)
+      await this.execCommand(`tar xvf ${remoteTarPath} -C ${this.newReleaseDir}`)
+      await this.execCommand(`rm -rf ${remoteTarPath}`)
     } else {
-      await this.uploadDirectory(local_target, this.new_release_dir, {
+      await this.uploadDirectory(this.localTarget, this.newReleaseDir, {
         recursive: true,
         concurrency: 1,
       })
       console.log('putDirectory completed')
     }
 
-    await this.execCommand(`ln -sfn ${this.new_release_dir} ${this.dist_target}`)
+    await this.execCommand(`ln -sfn ${this.newReleaseDir} ${this.distTarget}`)
+    console.log(`${this.distTarget} -> ${this.newReleaseDir} completed`)
 
     // 只保留最后5个版本
-    const { stdout } = await this.execCommand(`ls ${this.releases_dir}`)
+    const { stdout } = await this.execCommand(`ls ${this.releasesDir}`)
     const arr = _.sortBy(_.split(stdout, '\n'))
-    await this.execCommand(`rm -rf ${_.dropRight(arr, 5).map(name => path.posix.join(this.releases_dir, name)).join(' ')}`)
+    await this.execCommand(`rm -rf ${_.dropRight(arr, 5).map(name => path.posix.join(this.releasesDir, name)).join(' ')}`)
     await this.afterUpload()
   }
 
@@ -87,14 +96,14 @@ class NodeSSH extends node_ssh {
 
   }
 
-  static async deploy() {
-    for (const config of ssh_configs) {
-      const ssh = new this
+  static async deploy({ ssh_configs, ...deployConfig } = deployConfigInRoot) {
+    for (const sshConfig of ssh_configs) {
+      const ssh = new this(deployConfig)
       try {
-        const last_ssh = await ssh.connect2(config)
+        const lastSSH = await ssh.connect2(sshConfig)
         console.log('ssh connected')
 
-        await last_ssh.upload()
+        await lastSSH.upload()
         ssh.dispose()
       } catch (err) {
         console.error(err)
