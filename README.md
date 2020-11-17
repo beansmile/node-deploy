@@ -64,6 +64,7 @@ module.exports = {
 }
 ```
 
+```
 h5 和 admin 都部署时，服务器的目录结构('/var/www/xxx-frontend')
 .
 ├── admin -> /var/www/xxx-frontend/admin-releases/2020-03-20_11_07 //admin 文件是一个软链接，指向admin的最新版本
@@ -80,3 +81,4 @@ h5 和 admin 都部署时，服务器的目录结构('/var/www/xxx-frontend')
     ├── 2020-03-20_10_59
     ├── 2020-03-20_11_41
     └── 2020-03-20_18_53
+```
