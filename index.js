@@ -18,7 +18,7 @@ if (fs.existsSync(path.posix.resolve('deploy.config.js'))) {
 }
 
 class NodeSSH extends node_ssh {
-  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false }) {
+  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false } = deployConfigInRoot) {
     super()
     this.localTarget = local_target
     this.tar = tar
@@ -96,7 +96,10 @@ class NodeSSH extends node_ssh {
 
   }
 
-  static async deploy({ ssh_configs, ...deployConfig } = deployConfigInRoot) {
+  static async deploy({ ssh_configs, ...deployConfig }) {
+    if (!deployConfigInRoot) {
+      deployConfigInRoot = { ssh_configs, ...deployConfig }
+    }
     for (const sshConfig of ssh_configs) {
       const ssh = new this(deployConfig)
       try {
@@ -114,7 +117,7 @@ class NodeSSH extends node_ssh {
 }
 
 if (require.main === module) {
-  NodeSSH.deploy()
+  NodeSSH.deploy(deployConfigInRoot)
 } else {
   module.exports = NodeSSH
 }
