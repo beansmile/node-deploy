@@ -13,12 +13,8 @@ const defaultConfig = {
 
 let deployConfigInRoot = null
 
-if (fs.existsSync(path.posix.resolve('deploy.config.js'))) {
-  deployConfigInRoot = require(path.posix.resolve('deploy.config.js'))
-}
-
 class NodeSSH extends node_ssh {
-  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false }) {
+  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false } = deployConfigInRoot) {
     super()
     this.localTarget = local_target
     this.tar = tar
@@ -44,11 +40,18 @@ class NodeSSH extends node_ssh {
 
   async connect2(config, assignDefault = true) {
     if (assignDefault) config = Object.assign({}, defaultConfig, config)
+    console.log('connect:', {
+      host: config.host,
+      post: config.port,
+      forwardOut: config.forwardOut,
+      isSock: Boolean(config.sock),
+    })
     await this.connect(config)
 
     let { forwardOut } = config
     if (forwardOut) {
       forwardOut = Object.assign({}, defaultConfig, forwardOut)
+      console.log(`forwardOut('127.0.0.1', 22, ${forwardOut.host}, ${forwardOut.port})`)
       const stream = await this.forwardOut('127.0.0.1', 22, forwardOut.host, forwardOut.port)
       const ssh = new this.constructor
       return ssh.connect2({
@@ -63,12 +66,16 @@ class NodeSSH extends node_ssh {
   async upload() {
     if (this.tar) {
       const localTarPath = path.posix.join(this.localTarget, 'build.tar')
+      console.log(`exec(tar -cvf ${localTarPath} -C ${this.localTarget} .)`)
       await exec(`tar -cvf ${localTarPath} -C ${this.localTarget} .`)
       const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar')
+      console.log(`putFile(${localTarPath}, ${remoteTarPath})`)
       await this.putFile(localTarPath, remoteTarPath)
       console.log('putFile completed')
 
+      console.log(`execCommand(tar xvf ${remoteTarPath} -C ${this.newReleaseDir})`)
       await this.execCommand(`tar xvf ${remoteTarPath} -C ${this.newReleaseDir}`)
+      console.log(`execCommand(rm -rf ${remoteTarPath})`)
       await this.execCommand(`rm -rf ${remoteTarPath}`)
     } else {
       await this.uploadDirectory(this.localTarget, this.newReleaseDir, {
@@ -96,7 +103,10 @@ class NodeSSH extends node_ssh {
 
   }
 
-  static async deploy({ ssh_configs, ...deployConfig } = deployConfigInRoot) {
+  static async deploy({ ssh_configs, ...deployConfig }) {
+    if (!deployConfigInRoot) {
+      deployConfigInRoot = { ssh_configs, ...deployConfig }
+    }
     for (const sshConfig of ssh_configs) {
       const ssh = new this(deployConfig)
       try {
@@ -114,7 +124,8 @@ class NodeSSH extends node_ssh {
 }
 
 if (require.main === module) {
-  NodeSSH.deploy()
+  deployConfigInRoot = require(path.posix.resolve('deploy.config.js'));
+  NodeSSH.deploy(deployConfigInRoot)
 } else {
   module.exports = NodeSSH
 }
