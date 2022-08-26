@@ -13,10 +13,6 @@ const defaultConfig = {
 
 let deployConfigInRoot = null
 
-if (fs.existsSync(path.posix.resolve('deploy.config.js'))) {
-  deployConfigInRoot = require(path.posix.resolve('deploy.config.js'))
-}
-
 class NodeSSH extends node_ssh {
   constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false } = deployConfigInRoot) {
     super()
@@ -117,6 +113,7 @@ class NodeSSH extends node_ssh {
 }
 
 if (require.main === module) {
+  deployConfigInRoot = require(path.posix.resolve('deploy.config.js'));
   NodeSSH.deploy(deployConfigInRoot)
 } else {
   module.exports = NodeSSH
