@@ -81,6 +81,7 @@ class NodeSSH extends node_ssh {
       const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar')
       console.log(`putFile(${localTarPath}, ${remoteTarPath})`)
       await this.putFile(localTarPath, remoteTarPath)
+      await exec(`rm ${localTarPath}`)
       console.log('putFile completed')
 
       console.log(`execCommand(tar xvf ${remoteTarPath} -C ${this.newReleaseDir})`)
