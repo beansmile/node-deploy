@@ -14,10 +14,12 @@ const defaultConfig = {
 let deployConfigInRoot = null
 
 class NodeSSH extends node_ssh {
-  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false } = deployConfigInRoot) {
+  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false, excludes = [], includes = [] } = deployConfigInRoot) {
     super()
     this.localTarget = local_target
     this.tar = tar
+    this.includes = includes
+    this.excludes = excludes
     this.projectDir = project_dir // /var/www/xxx-frontend
     this.namespace = namespace // app
     this.distTarget = path.posix.join(this.projectDir, this.namespace) // /var/www/xxx-frontend/app
@@ -66,8 +68,16 @@ class NodeSSH extends node_ssh {
   async upload() {
     if (this.tar) {
       const localTarPath = path.posix.join(this.localTarget, 'build.tar')
-      console.log(`exec(tar -cvf ${localTarPath} -C ${this.localTarget} .)`)
-      await exec(`tar -cvf ${localTarPath} -C ${this.localTarget} .`)
+      let tarCommand = `tar -cvf ${localTarPath} -C ${this.localTarget}`
+      this.excludes.forEach((item) => {
+        tarCommand += ` --exclude='${item}'`
+      })
+      this.includes.forEach((item) => {
+        tarCommand += ` --include='${item}'`
+      })
+      tarCommand += ' .'
+      console.log(`exec(${tarCommand})`)
+      await exec(tarCommand)
       const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar')
       console.log(`putFile(${localTarPath}, ${remoteTarPath})`)
       await this.putFile(localTarPath, remoteTarPath)
