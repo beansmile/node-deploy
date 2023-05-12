@@ -11,6 +11,6 @@
   "dependencies": {
     "child-process-promise": "^2.2.1",
     "lodash": "^4.17.21",
-    "node-ssh": "^6.0.0"
+    "node-ssh": "^13.1.0"
   }
 }
