@@ -1,19 +1,20 @@
 const os = require('os')
 const path = require('path')
+const crypto = require('crypto')
 const { exec } = require('child-process-promise')
-const node_ssh = require('node-ssh')
+const {NodeSSH: OriginNodeSSH} = require('node-ssh')
 const _ = require('lodash')
 const fs = require('fs')
 
 const defaultConfig = {
   username: 'deploy',
   port: '22',
-  privateKey: `${os.homedir()}/.ssh/id_rsa`
+  privateKeyPath: `${os.homedir()}/.ssh/id_rsa`
 }
 
 let deployConfigInRoot = null
 
-class NodeSSH extends node_ssh {
+class NodeSSH extends OriginNodeSSH {
   constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false, excludes = [], includes = [] } = deployConfigInRoot) {
     super()
     this.localTarget = local_target
@@ -67,8 +68,8 @@ class NodeSSH extends node_ssh {
 
   async upload() {
     if (this.tar) {
-      const localTarPath = path.posix.join(this.localTarget, 'build.tar')
-      let tarCommand = `tar -cvf ${localTarPath} -C ${this.localTarget}`
+      const localTarPath = path.posix.join('/tmp', `build-${crypto.randomBytes(4).toString('hex')}.tar.gz`)
+      let tarCommand = `tar -czvf ${localTarPath} -C ${this.localTarget}`
       this.excludes.forEach((item) => {
         tarCommand += ` --exclude='${item}'`
       })
@@ -78,14 +79,14 @@ class NodeSSH extends node_ssh {
       tarCommand += ' .'
       console.log(`exec(${tarCommand})`)
       await exec(tarCommand)
-      const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar')
+      const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar.gz')
       console.log(`putFile(${localTarPath}, ${remoteTarPath})`)
       await this.putFile(localTarPath, remoteTarPath)
       await exec(`rm ${localTarPath}`)
       console.log('putFile completed')
 
-      console.log(`execCommand(tar xvf ${remoteTarPath} -C ${this.newReleaseDir})`)
-      await this.execCommand(`tar xvf ${remoteTarPath} -C ${this.newReleaseDir}`)
+      console.log(`execCommand(tar xzvf ${remoteTarPath} -C ${this.newReleaseDir})`)
+      await this.execCommand(`tar xzvf ${remoteTarPath} -C ${this.newReleaseDir}`)
       console.log(`execCommand(rm -rf ${remoteTarPath})`)
       await this.execCommand(`rm -rf ${remoteTarPath}`)
     } else {
