@@ -125,7 +125,8 @@ NodeSSH.deploy({
         resolve();
       })
       // 所有 write 命令最后，都需要加上 \n, 否则命令不会执行
-      shell.write('cd /var/www/the-spear-turnitin-automation/current && pnpm install\n');
+      shell.write('cd /var/www/xxxx && pnpm install\n');
+      // ...... 其他命名操作
       // 退出 shell
       shell.write('exit\n');
     })
