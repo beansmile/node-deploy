@@ -15,8 +15,9 @@ const defaultConfig = {
 let deployConfigInRoot = null
 
 class NodeSSH extends OriginNodeSSH {
-  constructor({ project_dir, namespace = 'current', release_name, local_target, tar = false, excludes = [], includes = [] } = deployConfigInRoot) {
+  constructor({ afterUpload, project_dir, namespace = 'current', release_name, local_target, tar = false, excludes = [], includes = [] } = deployConfigInRoot) {
     super()
+    this.afterUpload = afterUpload
     this.localTarget = local_target
     this.tar = tar
     this.includes = includes
@@ -104,15 +105,11 @@ class NodeSSH extends OriginNodeSSH {
     const { stdout } = await this.execCommand(`ls ${this.releasesDir}`)
     const arr = _.sortBy(_.split(stdout, '\n'))
     await this.execCommand(`rm -rf ${_.dropRight(arr, 5).map(name => path.posix.join(this.releasesDir, name)).join(' ')}`)
-    await this.afterUpload()
+    this.afterUpload && (await this.afterUpload(this))
   }
 
   uploadDirectory(...args) {
     return this.putDirectory(...args)
-  }
-
-  afterUpload() {
-
   }
 
   static async deploy({ ssh_configs, ...deployConfig }) {
