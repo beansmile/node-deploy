@@ -13,21 +13,21 @@ const defaultConfig = {
   privateKeyPath: `${os.homedir()}/.ssh/id_rsa`,
 };
 
-let deployConfigInRoot = null;
-
 class NodeSSH extends OriginNodeSSH {
-  constructor({
-    afterUpload,
-    project_dir,
-    namespace = 'current',
-    release_name,
-    local_target,
-    tar = false,
-    excludes = [],
-    includes = [],
-    versionsRetainedNumber = 1,
-  } = deployConfigInRoot) {
+  constructor(deployConfig = {}) {
     super();
+    const {
+      afterUpload,
+      project_dir,
+      namespace = 'current',
+      release_name,
+      local_target,
+      tar = false,
+      excludes = [],
+      includes = [],
+      versionsRetainedNumber = 1,
+    } = this.deployConfig = deployConfig;
+
     this.afterUpload = afterUpload;
     this.localTarget = local_target;
     this.tar = tar;
@@ -69,7 +69,7 @@ class NodeSSH extends OriginNodeSSH {
       forwardOut = Object.assign({}, defaultConfig, forwardOut);
       console.log(`forwardOut('127.0.0.1', 22, ${forwardOut.host}, ${forwardOut.port})`);
       const stream = await this.forwardOut('127.0.0.1', 22, forwardOut.host, forwardOut.port);
-      const ssh = new this.constructor();
+      const ssh = new this.constructor(this.deployConfig);
       return ssh.connect2({
         sock: stream,
         ..._.omit(forwardOut, 'host', 'port'),
@@ -124,9 +124,6 @@ class NodeSSH extends OriginNodeSSH {
   }
 
   static async deploy({ ssh_configs, ...deployConfig }) {
-    if (!deployConfigInRoot) {
-      deployConfigInRoot = { ssh_configs, ...deployConfig };
-    }
     for (const sshConfig of ssh_configs) {
       const ssh = new this(deployConfig);
       try {
@@ -157,8 +154,8 @@ function deploy(config) {
 }
 
 if (require.main === module) {
-  deployConfigInRoot = require(path.posix.resolve('deploy.config.js'));
-  return deploy(deployConfigInRoot);
+  const deployConfig = require(path.posix.resolve('deploy.config.js'));
+  return deploy(deployConfig);
 } else {
   module.exports = { NodeSSH, DeployToOss, deploy };
 }
