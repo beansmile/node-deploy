@@ -19,11 +19,13 @@ class DeployAliOss {
       ossNamespace,
       ossPattern,
       versionsRetainedNumber, // 保留的版本数量
+      local_target = path.resolve('dist')
     } = config;
 
     this.config.ossNamespace = ossNamespace || 'frontend';
-    this.config.ossPattern = ossPattern || `${path.resolve('dist')}/**/*.!(html)`;
+    this.config.ossPattern = ossPattern || `${local_target}/**/*.!(html)`;
     this.config.versionsRetainedNumber = Math.max(versionsRetainedNumber, 1);
+    this.localTarget = local_target;
 
     this.client = new OSS({
       accessKeyId: ossAccessKeyId,
@@ -104,7 +106,7 @@ class DeployAliOss {
 
     const fileList = files.map(item => ({
       filePath: item,
-      fileName: path.join(this.config.ossNamespace, path.relative(path.resolve('dist'), item)),
+      fileName: path.join(this.config.ossNamespace, path.relative(this.localTarget, item)),
     }));
 
     console.log('上传到OSS...');
