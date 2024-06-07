@@ -82,7 +82,7 @@ class NodeSSH extends OriginNodeSSH {
   async upload() {
     if (this.tar) {
       const localTarPath = path.posix.join('/tmp', `build-${crypto.randomBytes(4).toString('hex')}.tar.gz`);
-      let tarCommand = `tar -czvf ${localTarPath} -C ${this.localTarget}`;
+      let tarCommand = `tar --no-mac-metadata -czvf ${localTarPath} -C ${this.localTarget}`;
       this.excludes.forEach((item) => {
         tarCommand += ` --exclude='${item}'`;
       });
