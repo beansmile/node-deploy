@@ -4,19 +4,26 @@
 - [h5 项目参考配置](#h5-项目参考配置)
 - [admin 项目参考配置](#admin-项目参考配置)
 - [服务器目录说明](#服务器目录说明)
-- [只需要上传到阿里云 oss](#只需要上传到阿里云-oss)
+- [只需要上传到阿里云 OSS](#只需要上传到阿里云-oss)
+- [只需要上传到腾讯云 COS](#只需要上传到腾讯云-cos)
 - [afterUpload 示例](#afterupload-示例)
 
 ### 使用方式
 ```javascript
-  const { DeployToOss, deploy, NodeSSH } = require('node-deploy');
+  const { DeployToOss, DeployToCos, deploy, NodeSSH } = require('node-deploy');
   deploy({
-    // 同时上传 oss 和服务器配置
+    // 同时上传到云存储和服务器配置
+    // 根据配置参数自动判断使用阿里云OSS还是腾讯云COS
     // .......
   });
 
   DeployToOss.deploy({
-    // 只上传 oss
+    // 只上传阿里云 OSS
+    // .......
+  });
+
+  DeployToCos.deploy({
+    // 只上传腾讯云 COS
     // .......
   });
 
@@ -29,13 +36,23 @@
 ### 参数说明
 ```javascript
 module.exports = {
-  ossAccessKeyId,                                      // aliyun oss accessKeyId
-  ossAccessKeySecret,                                  // aliyun oss accessKeySecret
-  ossBucket,                                           // aliyun oss bucket
-  ossEndpoint,                                         // aliyun oss endpoint
-  ossTimeout,                                          // （选填）上传aliyun oss 的超时时间, 默认: '600s'
-  ossNamespace,                                        // （选填）aliyun oss 上传文件夹，默认: 'frontend'
-  ossPattern,                                          // （选填）需要上传aliyun oss的文件，默认: `${path.resolve('dist')}/**/*.!(html)`
+  // 阿里云OSS相关配置
+  ossAccessKeyId,                                      // oss accessKeyId
+  ossAccessKeySecret,                                  // oss accessKeySecret
+  ossBucket,                                           // oss bucket
+  ossEndpoint,                                         // oss endpoint
+  ossTimeout,                                          // （选填）上传 oss 的超时时间, 默认: '600s'
+  ossNamespace,                                        // （选填）oss 上传文件夹，默认: 'frontend'
+  ossPattern,                                          // （选填）需要上传oss的文件，默认: `${path.resolve('dist')}/**/*.!(html)`
+
+  // 腾讯云COS相关配置
+  cosSecretId,                                         // cos SecretId
+  cosSecretKey,                                        // cos SecretKey
+  cosBucket,                                           // cos Bucket
+  cosRegion,                                           // cos Region
+  cosNamespace,                                        // （选填）cos 上传文件夹，默认: 'frontend'
+  cosPattern,                                          // （选填）需要上传cos的文件，默认: `${path.resolve('dist')}/**/*.!(html)`
+
   versionsRetainedNumber,                              // （选填）需要保留的版本数量, 默认 1
 
   // 以下为上传服务器的配置
@@ -65,7 +82,7 @@ const dayjs = require('dayjs')
 const path = require('path')
 
 module.exports = {
-  // 如需上传到阿里云 oss 需要配置以下参数, 否则可以不配置
+  // 阿里云OSS配置
   ossAccessKeyId: OSS_ACCESS_KEY_ID,
   ossAccessKeySecret: OSS_ACCESS_KEY_SECRET,
   ossBucket: OSS_BUCKET,
@@ -104,12 +121,12 @@ const moment = require('moment')
 const path = require('path')
 
 module.exports = {
-  // 如需上传到阿里云 oss 需要配置以下参数, 否则可以不配置
-  ossAccessKeyId: OSS_ACCESS_KEY_ID,
-  ossAccessKeySecret: OSS_ACCESS_KEY_SECRET,
-  ossBucket: OSS_BUCKET,
-  ossEndpoint: OSS_ENDPOINT,
-  ossNamespace: OSS_ASSETS_NAMESPACE,
+  // 腾讯云COS配置
+  cosSecretId: COS_SECRET_ID,
+  cosSecretKey: COS_SECRET_KEY,
+  cosBucket: COS_BUCKET,
+  cosRegion: COS_REGION,
+  cosNamespace: COS_ASSETS_NAMESPACE,
 
   // 以下为上传服务器的配置
   project_dir: '/var/www/xxx-frontend',
@@ -157,10 +174,11 @@ h5 和 admin 都部署时，服务器的目录结构('/var/www/xxx-frontend')
     └── 2020-03-20_18_53
 ```
 
-### 只需要上传到阿里云 oss
+### 只需要上传到阿里云 OSS
 ```javascript
 const { DeployToOss } = require('node-deploy');
 
+// 上传到阿里云 OSS
 DeployToOss.deploy({
   ossAccessKeyId: OSS_ACCESS_KEY_ID,
   ossAccessKeySecret: OSS_ACCESS_KEY_SECRET,
@@ -169,6 +187,22 @@ DeployToOss.deploy({
   ossNamespace: OSS_ASSETS_NAMESPACE,   // 选填，默认 'frontend'
   ossPattern: `${path.resolve('dist')}/**/*.!(html)`,   // 选填，规则参考 https://www.npmjs.com/package/glob
   ossTimeout: '600s',                  // 选填
+});
+```
+
+### 只需要上传到腾讯云 COS
+```javascript
+const { DeployToCos } = require('node-deploy');
+
+// 上传到腾讯云 COS
+DeployToCos.deploy({
+  cosSecretId: COS_SECRET_ID,
+  cosSecretKey: COS_SECRET_KEY,
+  cosBucket: COS_BUCKET,
+  cosRegion: COS_REGION,
+  cosNamespace: COS_ASSETS_NAMESPACE,     // 选填，默认 'frontend'
+  cosPattern: `${path.resolve('dist')}/**/*.!(html)`,   // 选填，规则参考 https://www.npmjs.com/package/glob
+  versionsRetainedNumber: 3,             // 选填，默认保留1个版本
 });
 ```
 
