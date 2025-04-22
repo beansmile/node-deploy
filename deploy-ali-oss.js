@@ -19,7 +19,7 @@ class DeployAliOss {
       ossNamespace,
       ossPattern,
       versionsRetainedNumber, // 保留的版本数量
-      local_target = path.resolve('dist')
+      local_target = path.resolve('dist'),
     } = config;
 
     this.config.ossNamespace = ossNamespace || 'frontend';

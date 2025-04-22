@@ -6,6 +6,7 @@ const { exec } = require('child-process-promise');
 const { NodeSSH: OriginNodeSSH } = require('node-ssh');
 const _ = require('lodash');
 const DeployToOss = require('./deploy-ali-oss');
+const DeployToCos = require('./deploy-tencent-cos');
 
 const defaultConfig = {
   username: 'deploy',
@@ -142,11 +143,20 @@ class NodeSSH extends OriginNodeSSH {
 
 function deploy(config) {
   if (
+    config.cosSecretId
+    && config.cosSecretKey
+    && config.cosBucket
+    && config.cosRegion
+  ) {
+    console.log('使用腾讯云COS');
+    return DeployToCos.deploy(config).then(() => NodeSSH.deploy(config));
+  } else if (
     config.ossAccessKeyId
     && config.ossAccessKeySecret
     && config.ossBucket
     && config.ossEndpoint
   ) {
+    console.log('使用阿里云OSS');
     return DeployToOss.deploy(config).then(() => NodeSSH.deploy(config));
   } else {
     return NodeSSH.deploy(config);
@@ -157,5 +167,5 @@ if (require.main === module) {
   const deployConfig = require(path.posix.resolve('deploy.config.js'));
   return deploy(deployConfig);
 } else {
-  module.exports = { NodeSSH, DeployToOss, deploy };
+  module.exports = { NodeSSH, DeployToOss, DeployToCos, deploy };
 }
