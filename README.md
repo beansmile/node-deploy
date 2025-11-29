@@ -52,6 +52,7 @@ module.exports = {
   cosRegion,                                           // cos Region
   cosNamespace,                                        // （选填）cos 上传文件夹，默认: 'frontend'
   cosPattern,                                          // （选填）需要上传cos的文件，默认: `${path.resolve('dist')}/**/*.!(html)`
+  ossClearLocalFile,                                   // （选填）删除成功上传到 OSS 的本地文件`
 
   versionsRetainedNumber,                              // （选填）需要保留的版本数量, 默认 1
 

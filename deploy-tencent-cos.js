@@ -17,11 +17,13 @@ class DeployTencentCos {
       cosRegion,
       cosNamespace,
       cosPattern,
+      ossClearLocalFile,
       versionsRetainedNumber, // 保留的版本数量
       local_target = path.resolve('dist'),
     } = config;
 
     this.config = {};
+    this.config.ossClearLocalFile = typeof ossClearLocalFile === 'boolean' ? ossClearLocalFile : true;
     this.config.cosNamespace = cosNamespace || 'frontend';
     this.config.cosPattern = cosPattern || `${local_target}/**/*.!(html)`;
     this.config.versionsRetainedNumber = Math.max(versionsRetainedNumber, 1);
@@ -173,9 +175,11 @@ class DeployTencentCos {
       await this.uploadFile(item.fileName, item.filePath);
     });
     console.log('上传到腾讯云COS完成');
-    console.log('清理dist目录...');
-    await Promise.all(files.map(item => fs.remove(item)));
-    console.log('清理dist目录完成');
+    if (this.config.ossClearLocalFile) {
+      console.log('清理dist目录...');
+      await Promise.all(files.map(item => fs.remove(item)));
+      console.log('清理dist目录完成');
+    }
     await this.clearOldVersionFiles();
   };
 
