@@ -17,6 +17,7 @@ class DeployTencentCos {
       cosRegion,
       cosNamespace,
       cosPattern,
+      cosIgnore, // 支持排除特定文件或目录（字符串或数组）
       ossClearLocalFile,
       versionsRetainedNumber, // 保留的版本数量
       local_target = path.resolve('dist'),
@@ -26,6 +27,7 @@ class DeployTencentCos {
     this.config.ossClearLocalFile = typeof ossClearLocalFile === 'boolean' ? ossClearLocalFile : true;
     this.config.cosNamespace = cosNamespace || 'frontend';
     this.config.cosPattern = cosPattern || `${local_target}/**/*.!(html)`;
+    this.config.cosIgnore = cosIgnore; // 支持 glob 的 ignore 选项
     this.config.versionsRetainedNumber = Math.max(versionsRetainedNumber, 1);
     this.localTarget = local_target;
 
@@ -38,15 +40,9 @@ class DeployTencentCos {
     this.region = cosRegion;
   }
 
-  getFiles = (pattern = this.config.cosPattern) => {
-    return new Promise((resolve, reject) => {
-      glob(pattern, (err, files) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(files);
-      });
-    });
+  getFiles = async (pattern = this.config.cosPattern) => {
+    // glob 10+ 支持 Promise API 和数组模式
+    return await glob(pattern, { ignore: this.config.cosIgnore || [] });
   };
 
   clearOldVersionFiles = async () => {

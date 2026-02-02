@@ -18,6 +18,7 @@ class DeployAliOss {
       ossTimeout,
       ossNamespace,
       ossPattern,
+      ossIgnore, // 支持排除特定文件或目录（字符串或数组）
       ossClearLocalFile,
       versionsRetainedNumber, // 保留的版本数量
       local_target = path.resolve('dist'),
@@ -26,6 +27,7 @@ class DeployAliOss {
     this.config.ossClearLocalFile = typeof ossClearLocalFile === 'boolean' ? ossClearLocalFile : true;
     this.config.ossNamespace = ossNamespace || 'frontend';
     this.config.ossPattern = ossPattern || `${local_target}/**/*.!(html)`;
+    this.config.ossIgnore = ossIgnore; // 支持 glob 的 ignore 选项
     this.config.versionsRetainedNumber = Math.max(versionsRetainedNumber, 1);
     this.localTarget = local_target;
 
@@ -40,15 +42,9 @@ class DeployAliOss {
 
   config = {};
 
-  getFiles = (pattern = this.config.ossPattern) => {
-    return new Promise((resolve, reject) => {
-      glob(pattern, (err, files) => {
-        if (err) {
-          return reject(err);
-        }
-        resolve(files);
-      });
-    });
+  getFiles = async (pattern = this.config.ossPattern) => {
+    // glob 10+ 支持 Promise API 和数组模式
+    return await glob(pattern, { ignore: this.config.ossIgnore || [] });
   };
 
   clearOldVersionFiles = async () => {
