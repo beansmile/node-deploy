@@ -1,10 +1,14 @@
 /* eslint-disable no-console */
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { exec } = require('child-process-promise');
 const { NodeSSH: OriginNodeSSH } = require('node-ssh');
 const _ = require('lodash');
+const { glob } = require('glob');
+const tar = require('tar-stream');
 const DeployToOss = require('./deploy-ali-oss');
 const DeployToCos = require('./deploy-tencent-cos');
 
@@ -80,19 +84,97 @@ class NodeSSH extends OriginNodeSSH {
     }
   }
 
+  // 使用 glob 和 tar-stream 打包
+  // glob 语法示例：
+  //   - excludes: ['node_modules/**'] -> 排除根目录的 node_modules
+  //   - excludes: ['**/node_modules/**'] -> 排除所有层级的 node_modules
+  //   - excludes: ['.git/**'] -> 排除根目录的 .git
+  //   - excludes: ['**/.DS_Store'] -> 排除所有 .DS_Store 文件
+  //   - includes: ['dist/**', 'public/**'] -> 只打包这些目录
+  async createTar(localTarPath) {
+    const pack = tar.pack();
+    const gzip = zlib.createGzip();
+    const output = fs.createWriteStream(localTarPath);
+
+    // 管道：pack -> gzip -> output
+    pack.pipe(gzip).pipe(output);
+
+    // 构建包含模式
+    const patterns = this.includes.length > 0 ? this.includes : ['**/*'];
+
+    // 使用 glob 获取所有匹配的文件
+    const allFileLists = await Promise.all(
+      patterns.map(pattern =>
+        glob(pattern, {
+          cwd: this.localTarget,
+          dot: true,
+          nodir: false,
+          ignore: this.excludes,
+        })
+      )
+    );
+
+    // 合并并去重
+    const allFiles = [...new Set(allFileLists.flat())].sort();
+
+    console.log(`找到 ${allFiles.length} 个文件/目录需要打包`);
+    console.log(`包含模式: ${JSON.stringify(patterns)}`);
+    console.log(`排除模式: ${JSON.stringify(this.excludes)}`);
+
+    // 逐个添加文件到 tar
+    let processed = 0;
+    for (const file of allFiles) {
+      const fullPath = path.join(this.localTarget, file);
+      const stats = fs.statSync(fullPath);
+
+      if (stats.isDirectory()) {
+        pack.entry({ name: file, type: 'directory' });
+      } else {
+        const content = fs.readFileSync(fullPath);
+        pack.entry({ name: file, size: content.length }, content);
+      }
+
+      processed++;
+      if (processed % 100 === 0) {
+        console.log(`已处理 ${processed}/${allFiles.length} 个文件...`);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      output.on('finish', () => {
+        console.log(`✅ Tar 打包完成: ${localTarPath}`);
+        resolve();
+      });
+      output.on('error', reject);
+      pack.finalize();
+    });
+  }
+
   async upload() {
     if (this.tar) {
-      const localTarPath = path.posix.join('/tmp', `build-${crypto.randomBytes(4).toString('hex')}.tar.gz`);
-      let tarCommand = `COPYFILE_DISABLE=1 tar -czvf ${localTarPath} -C ${this.localTarget}`;
-      this.excludes.forEach((item) => {
-        tarCommand += ` --exclude='${item}'`;
-      });
-      this.includes.forEach((item) => {
-        tarCommand += ` --include='${item}'`;
-      });
-      tarCommand += ' .';
-      console.log(`exec(${tarCommand})`);
-      await exec(tarCommand);
+      // 如果是本地模式或没有 SSH 配置，直接生成到项目目录
+      const noSSH = !this.deployConfig.ssh_configs || this.deployConfig.ssh_configs.length === 0;
+      const localTarPath = (this.deployConfig.localOnly || noSSH)
+        ? path.resolve('./build.tar.gz')
+        : path.posix.join('/tmp', `build-${crypto.randomBytes(4).toString('hex')}.tar.gz`);
+
+      // 使用 glob + tar-stream 打包
+      console.log('使用 tar-stream 打包（支持 glob 语法）...');
+      await this.createTar(localTarPath);
+
+      // 如果是本地模式，直接返回
+      if (this.deployConfig.localOnly) {
+        console.log(`✅ 本地打包完成: ${localTarPath}`);
+
+        // 列出打包内容供用户检查
+        console.log('\n📦 打包内容预览:');
+        const { stdout } = await exec(`tar -tzf ${localTarPath} | head -50`);
+        console.log(stdout);
+        const { stdout: total } = await exec(`tar -tzf ${localTarPath} | wc -l`);
+        console.log(`... 共 ${total.trim()} 个文件\n`);
+        return;
+      }
+
       const remoteTarPath = path.posix.join(this.newReleaseDir, 'build.tar.gz');
       console.log(`putFile(${localTarPath}, ${remoteTarPath})`);
       await this.putFile(localTarPath, remoteTarPath);
@@ -125,6 +207,21 @@ class NodeSSH extends OriginNodeSSH {
   }
 
   static async deploy({ ssh_configs, ...deployConfig }) {
+    // 本地模式：如果没有 SSH 配置或使用 localOnly，直接打包
+    const isLocalMode = !ssh_configs || ssh_configs.length === 0 || deployConfig.localOnly;
+
+    if (isLocalMode) {
+      const ssh = new this(deployConfig);
+      try {
+        await ssh.upload();
+      } catch (err) {
+        console.error(err);
+        process.exit(1);
+      }
+      return;
+    }
+
+    // SSH 部署模式
     for (const sshConfig of ssh_configs) {
       const ssh = new this(deployConfig);
       try {
