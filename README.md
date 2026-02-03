@@ -62,6 +62,7 @@ module.exports = {
   release_name: dayjs().format('YYYY-MM-DD_HH_mm'),    // 版本名称
   local_target: path.resolve('dist'),                  // uni-app build 后，打包文件的所在位置
   tar: false,                                          // 不开启压缩上传
+  localOnly: false,                                    // （选填）本地打包模式，只生成 tar 包不上传服务器，默认: false
   includes: [],                                        // （选填）只打包匹配的文件/目录，支持 glob 语法，默认: ['**/*']
   excludes: [],                                        // （选填）排除匹配的文件/目录，支持 glob 语法，默认: []
   afterUpload(ssh): Promise<void>,                     // （选填）执行完上传后的回调函数，参考下方 afterUpload 示例
@@ -100,6 +101,29 @@ module.exports = {
   ],
 }
 ```
+
+#### 本地打包模式（localOnly）
+
+如果只需要在本地生成 tar 包，而不需要上传到服务器，可以使用 `localOnly` 选项：
+
+```javascript
+const { NodeSSH } = require('node-deploy');
+
+NodeSSH.deploy({
+  localOnly: true,                          // 开启本地打包模式
+  tar: true,                                // 必须开启 tar 压缩
+  local_target: path.resolve('dist'),       // 需要打包的目录
+  includes: ['**/*'],                       // （选填）只打包匹配的文件
+  excludes: ['node_modules/**', '.git/**'], // （选填）排除匹配的文件
+  // 不需要配置 ssh_configs（即使配置了也不会上传）
+});
+```
+
+使用 `localOnly` 模式时：
+- 会在项目根目录生成 `build.tar.gz` 文件
+- 自动显示打包内容预览（前 50 个文件）
+- **不会上传到服务器**（即使配置了 `ssh_configs` 也不会上传）
+- 适用于需要手动部署或传输打包文件的场景
 
 ### h5 项目参考配置
 ```javascript
