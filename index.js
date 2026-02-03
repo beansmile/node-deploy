@@ -31,14 +31,18 @@ class NodeSSH extends OriginNodeSSH {
       excludes = [],
       includes = [],
       versionsRetainedNumber = 1,
+      globOptions = {},
+      localOnly = false,
     } = this.deployConfig = deployConfig;
 
     this.afterUpload = afterUpload;
     this.localTarget = local_target;
     this.tar = tar;
     this.includes = includes;
-    this.excludes = excludes;
+    // 如果是本地模式，自动排除 build.tar.gz 避免循环打包
+    this.excludes = localOnly ? [...excludes, 'build.tar.gz'] : excludes;
     this.versionsRetainedNumber = Math.max(versionsRetainedNumber, 1);
+    this.globOptions = globOptions;
     this.projectDir = project_dir; // /var/www/xxx-frontend
     this.namespace = namespace; // app
     this.distTarget = path.posix.join(this.projectDir, this.namespace); // /var/www/xxx-frontend/app
@@ -91,6 +95,8 @@ class NodeSSH extends OriginNodeSSH {
   //   - excludes: ['.git/**'] -> 排除根目录的 .git
   //   - excludes: ['**/.DS_Store'] -> 排除所有 .DS_Store 文件
   //   - includes: ['dist/**', 'public/**'] -> 只打包这些目录
+  //   - globOptions: { maxDepth: 3 } -> 自定义 glob 选项（如限制目录遍历深度）
+  //   - localOnly: true -> 本地打包模式，自动排除 build.tar.gz 避免循环打包
   async createTar(localTarPath) {
     const pack = tar.pack();
     const gzip = zlib.createGzip();
@@ -110,8 +116,9 @@ class NodeSSH extends OriginNodeSSH {
           dot: true,
           nodir: false,
           ignore: this.excludes,
-        })
-      )
+          ...this.globOptions,
+        }),
+      ),
     );
 
     // 合并并去重

@@ -65,6 +65,7 @@ module.exports = {
   localOnly: false,                                    // （选填）本地打包模式，只生成 tar 包不上传服务器，默认: false
   includes: [],                                        // （选填）只打包匹配的文件/目录，支持 glob 语法，默认: ['**/*']
   excludes: [],                                        // （选填）排除匹配的文件/目录，支持 glob 语法，默认: []
+  globOptions: {},                                     // （选填）自定义 glob 选项，如 { maxDepth: 3 }，默认: {}
   afterUpload(ssh): Promise<void>,                     // （选填）执行完上传后的回调函数，参考下方 afterUpload 示例
   ssh_configs: [
     {
@@ -102,6 +103,23 @@ module.exports = {
 }
 ```
 
+**高级选项：自定义 glob 行为**
+
+通过 `globOptions` 可以自定义 glob 的行为，支持所有 [glob](https://www.npmjs.com/package/glob) 库的选项：
+
+```javascript
+{
+  globOptions: {
+    follow: true,           // 跟随符号链接（默认为 false，如需要上传 node_modules 等符号链接目录时可设为 true）
+    // 更多选项请参考 glob 文档
+  },
+}
+```
+
+**注意事项：**
+- 使用 `localOnly: true` 时，会自动将 `build.tar.gz` 添加到 `excludes`，避免循环打包
+- `globOptions` 中的选项会覆盖默认配置
+
 #### 本地打包模式（localOnly）
 
 如果只需要在本地生成 tar 包，而不需要上传到服务器，可以使用 `localOnly` 选项：
@@ -121,6 +139,7 @@ NodeSSH.deploy({
 
 使用 `localOnly` 模式时：
 - 会在项目根目录生成 `build.tar.gz` 文件
+- **自动排除 `build.tar.gz`**，避免重复运行时循环打包
 - 自动显示打包内容预览（前 50 个文件）
 - **不会上传到服务器**（即使配置了 `ssh_configs` 也不会上传）
 - 适用于需要手动部署或传输打包文件的场景
