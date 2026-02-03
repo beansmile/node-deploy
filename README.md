@@ -62,8 +62,8 @@ module.exports = {
   release_name: dayjs().format('YYYY-MM-DD_HH_mm'),    // 版本名称
   local_target: path.resolve('dist'),                  // uni-app build 后，打包文件的所在位置
   tar: false,                                          // 不开启压缩上传
-  includes: [],                                        // （选填）只需要上传的文件
-  excludes: [],                                        // （选填）不需要上传的文件
+  includes: [],                                        // （选填）只打包匹配的文件/目录，支持 glob 语法，默认: ['**/*']
+  excludes: [],                                        // （选填）排除匹配的文件/目录，支持 glob 语法，默认: []
   afterUpload(ssh): Promise<void>,                     // （选填）执行完上传后的回调函数，参考下方 afterUpload 示例
   ssh_configs: [
     {
@@ -74,6 +74,30 @@ module.exports = {
       }
     },
   ]
+}
+```
+
+#### Glob 语法说明
+
+`includes` 和 `excludes` 参数使用 [glob](https://www.npmjs.com/package/glob) 语法进行文件匹配：
+
+```javascript
+{
+  // 排除特定目录
+  excludes: [
+    'node_modules/**',      // 排除根目录的 node_modules
+    '**/node_modules/**',   // 排除所有层级的 node_modules
+    '.git/**',              // 排除 .git 目录
+    '**/.DS_Store',         // 排除所有 .DS_Store 文件
+    '*.log',                // 排除根目录的所有 .log 文件
+  ],
+
+  // 只打包特定文件
+  includes: [
+    'dist/**',              // 只打包 dist 目录
+    'public/**',            // 只打包 public 目录
+    '*.html',               // 只打包根目录的 HTML 文件
+  ],
 }
 ```
 

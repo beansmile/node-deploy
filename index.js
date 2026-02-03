@@ -31,8 +31,6 @@ class NodeSSH extends OriginNodeSSH {
       excludes = [],
       includes = [],
       versionsRetainedNumber = 1,
-      globPattern = '**/*', // 新增：glob 匹配模式（传了就用 Node.js tar-stream）
-      globIgnore = [], // 新增：glob 排除模式
     } = this.deployConfig = deployConfig;
 
     this.afterUpload = afterUpload;
@@ -40,8 +38,6 @@ class NodeSSH extends OriginNodeSSH {
     this.tar = tar;
     this.includes = includes;
     this.excludes = excludes;
-    this.globPattern = globPattern;
-    this.globIgnore = globIgnore;
     this.versionsRetainedNumber = Math.max(versionsRetainedNumber, 1);
     this.projectDir = project_dir; // /var/www/xxx-frontend
     this.namespace = namespace; // app
@@ -88,13 +84,14 @@ class NodeSSH extends OriginNodeSSH {
     }
   }
 
-  // 使用 Node.js tar-stream 打包（支持 globPattern 和 globIgnore）
-  // globIgnore 语法示例：
-  //   - 'node_modules/**'     -> 只排除根目录的 node_modules
-  //   - '**/node_modules/**'  -> 排除所有层级的 node_modules
-  //   - '.git/**'             -> 排除根目录的 .git
-  //   - '**/.DS_Store'        -> 排除所有 .DS_Store 文件
-  async createTarWithGlobPattern(localTarPath) {
+  // 使用 glob 和 tar-stream 打包
+  // glob 语法示例：
+  //   - excludes: ['node_modules/**'] -> 排除根目录的 node_modules
+  //   - excludes: ['**/node_modules/**'] -> 排除所有层级的 node_modules
+  //   - excludes: ['.git/**'] -> 排除根目录的 .git
+  //   - excludes: ['**/.DS_Store'] -> 排除所有 .DS_Store 文件
+  //   - includes: ['dist/**', 'public/**'] -> 只打包这些目录
+  async createTar(localTarPath) {
     const pack = tar.pack();
     const gzip = zlib.createGzip();
     const output = fs.createWriteStream(localTarPath);
@@ -102,23 +99,31 @@ class NodeSSH extends OriginNodeSSH {
     // 管道：pack -> gzip -> output
     pack.pipe(gzip).pipe(output);
 
-    // 使用 glob 获取文件，同时应用 globIgnore 排除
-    const allFiles = await glob(this.globPattern, {
-      cwd: this.localTarget,
-      dot: true,
-      nodir: false,
-      ignore: this.globIgnore,
-    });
+    // 构建包含模式
+    const patterns = this.includes.length > 0 ? this.includes : ['**/*'];
 
-    const filesToPack = allFiles.sort();
+    // 使用 glob 获取所有匹配的文件
+    const allFileLists = await Promise.all(
+      patterns.map(pattern =>
+        glob(pattern, {
+          cwd: this.localTarget,
+          dot: true,
+          nodir: false,
+          ignore: this.excludes,
+        })
+      )
+    );
 
-    console.log(`找到 ${filesToPack.length} 个文件/目录需要打包`);
-    console.log(`包含模式: ${this.globPattern}`);
-    console.log(`排除模式: ${JSON.stringify(this.globIgnore)}`);
+    // 合并并去重
+    const allFiles = [...new Set(allFileLists.flat())].sort();
+
+    console.log(`找到 ${allFiles.length} 个文件/目录需要打包`);
+    console.log(`包含模式: ${JSON.stringify(patterns)}`);
+    console.log(`排除模式: ${JSON.stringify(this.excludes)}`);
 
     // 逐个添加文件到 tar
     let processed = 0;
-    for (const file of filesToPack) {
+    for (const file of allFiles) {
       const fullPath = path.join(this.localTarget, file);
       const stats = fs.statSync(fullPath);
 
@@ -131,7 +136,7 @@ class NodeSSH extends OriginNodeSSH {
 
       processed++;
       if (processed % 100 === 0) {
-        console.log(`已处理 ${processed}/${filesToPack.length} 个文件...`);
+        console.log(`已处理 ${processed}/${allFiles.length} 个文件...`);
       }
     }
 
@@ -145,27 +150,6 @@ class NodeSSH extends OriginNodeSSH {
     });
   }
 
-  // 使用系统 tar 命令打包（旧版，兼容，使用 excludes）
-  async createTarWithSystem(localTarPath) {
-    let tarCommand = `COPYFILE_DISABLE=1 tar -czvf ${localTarPath} -C ${this.localTarget}`;
-
-    // 先添加所有 excludes
-    this.excludes.forEach((item) => {
-      tarCommand += ` --exclude='${item}'`;
-    });
-
-    // 再添加 includes (如果有的话)
-    this.includes.forEach((item) => {
-      tarCommand += ` --include='${item}'`;
-    });
-
-    // 最后添加要打包的目录
-    tarCommand += ' .';
-
-    console.log(`exec(${tarCommand})`);
-    await exec(tarCommand);
-  }
-
   async upload() {
     if (this.tar) {
       // 如果是本地模式或没有 SSH 配置，直接生成到项目目录
@@ -174,15 +158,9 @@ class NodeSSH extends OriginNodeSSH {
         ? path.resolve('./build.tar.gz')
         : path.posix.join('/tmp', `build-${crypto.randomBytes(4).toString('hex')}.tar.gz`);
 
-      // 根据配置选择打包方式
-      // 如果传了 globIgnore 或 globPattern 不是默认的，使用 Node.js tar-stream
-      if (this.globIgnore?.length > 0 || this.globPattern !== '**/*') {
-        console.log('使用 Node.js tar-stream 打包（支持 globPattern/globIgnore）...');
-        await this.createTarWithGlobPattern(localTarPath);
-      } else {
-        console.log('使用系统 tar 命令打包...');
-        await this.createTarWithSystem(localTarPath);
-      }
+      // 使用 glob + tar-stream 打包
+      console.log('使用 tar-stream 打包（支持 glob 语法）...');
+      await this.createTar(localTarPath);
 
       // 如果是本地模式，直接返回
       if (this.deployConfig.localOnly) {
@@ -229,9 +207,10 @@ class NodeSSH extends OriginNodeSSH {
   }
 
   static async deploy({ ssh_configs, ...deployConfig }) {
-    // 本地模式：如果没有 SSH 配置或使用 globPattern/globIgnore，直接打包
-    const hasGlobConfig = deployConfig.globIgnore?.length > 0 || deployConfig.globPattern !== '**/*';
-    if (!ssh_configs || ssh_configs.length === 0 || deployConfig.localOnly || hasGlobConfig) {
+    // 本地模式：如果没有 SSH 配置或使用 localOnly，直接打包
+    const isLocalMode = !ssh_configs || ssh_configs.length === 0 || deployConfig.localOnly;
+
+    if (isLocalMode) {
       const ssh = new this(deployConfig);
       try {
         await ssh.upload();
@@ -242,6 +221,7 @@ class NodeSSH extends OriginNodeSSH {
       return;
     }
 
+    // SSH 部署模式
     for (const sshConfig of ssh_configs) {
       const ssh = new this(deployConfig);
       try {
